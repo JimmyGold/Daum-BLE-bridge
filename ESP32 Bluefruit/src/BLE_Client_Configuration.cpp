@@ -22,7 +22,8 @@ static boolean doScan = false;
 static BLERemoteCharacteristic* pRemote_HR_Characteristic;
 static BLERemoteCharacteristic* pRemote_BATT_Characteristic;
 static BLEAdvertisedDevice* myDevice;
-
+static BLEAddress* HR_Address;
+String AddressHrSensor = "00:00:00:00:00:00"; 
 bool notificationOn;
 extern bool newBLEmessage;
 
@@ -111,11 +112,21 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice advertisedDevice) {
     // We have found a device, let us now see if it contains the service we are looking for.
     // Heart Rate
+    
     if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(service_HR_UUID)) { 
       Serial.print("BLE Advertised Device found: ");
       Serial.println(advertisedDevice.toString().c_str());
+      
+      if (advertisedDevice.getAddress().equals(*HR_Address)){ // if HR-Sensor is already avialable, then skip it (for Sensor with more than one BT-Channels)
+        Serial.println("HR Sensor is already available");
+        return;
+      } 
+
       BLEDevice::getScan()->stop();
       myDevice = new BLEAdvertisedDevice(advertisedDevice);
+      // Save address of first HR-Sensor      
+      *HR_Address = advertisedDevice.getAddress();
+      
       doConnect = true;
       doScan = true;
     } 
@@ -150,7 +161,8 @@ static void scanRun(){
 }
 
 void BLE_Setup(void){
-  BLEDevice::init("Smart Bike");  
+  BLEDevice::init("Smart Bike"); 
+  HR_Address = new BLEAddress(AddressHrSensor.c_str()); 
   scanRun();
 }
 
