@@ -86,7 +86,8 @@ void setup(void){
   while (!Serial); // required for Flora & Micro
   delay(500);
   Serial.begin(115200);
-
+  Serial2.begin(9600, SERIAL_8N2, RXD2, TXD2); // SERIAL_8N1 (8 Bits, No Paraty, 1 Stop Bit) SERIAL_8N2 (8 Bits, No Paraty, 2 Stop Bit)
+ 
   /* Initialise Bluefruit LE module */
   BLE_Setup(); // ESP32 internal BLE device (Client - Heart Rate)
 }
