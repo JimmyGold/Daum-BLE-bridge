@@ -1,6 +1,6 @@
 #include "BLE_Client_Configuration.h"
 
-#define BLUEFRUIT_BLE_ADDRESS "DC:8E:CD:9D:4B:47"   // Address of the Bluefruit LE module - to skip as "real" power meter
+#define BLUEFRUIT_BLE_ADDRESS "DC:8E:CD:9D:4B:47"   // Address of the Bluefruit LE module - to skip it as "real" power meter
 
 extern boolean HR_AVAILABLE;
 extern boolean PWR_AVAILABLE;
@@ -34,13 +34,18 @@ static void notifyCallback( // Client
   uint8_t* pData,
   size_t length,
   bool isNotify) {
-
-  //  if (pData[0] == 22 || pData[0] == 6 || pData[0] == 0) {    // Sensor Contact
-      if (pData[1] > 10 && pData[1] < 254) {                    // HR must be between 10 and 254 bpm
-        HR_val = pData[1];
-      } else HR_val =0;
-  //  } else HR_val = 0;
+    if (pData[1] > 10 && pData[1] < 254) {  // HR must be between 10 and 254 bpm
+      HR_val = pData[1];
+    } else HR_val =0;
     newBLEmessage = true;
+}
+
+void ESPHardRestart()
+{
+  esp_task_wdt_init(1, true);
+  esp_task_wdt_add(NULL);
+  while (true)
+    ;
 }
 
 class MyClientCallback : public BLEClientCallbacks {
@@ -50,11 +55,10 @@ class MyClientCallback : public BLEClientCallbacks {
   void onDisconnect(BLEClient* pclient) {
     connected = false;
     Serial.println("onDisconnect");
+    ESPHardRestart(); // Restart ESP if HR-Sensor disconnects to initiate a new connection
+                      // ESP hangs in a loop - there should be a better solution
   }
 };
-
-
-
 
 bool connectToServer() {
     Serial.print("Forming a connection to ");
@@ -111,8 +115,7 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
    */
   void onResult(BLEAdvertisedDevice advertisedDevice) {
     // We have found a device, let us now see if it contains the service we are looking for.
-    // Heart Rate
-    
+    // Heart Rate  
     if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(service_HR_UUID)) { 
       Serial.print("BLE Advertised Device found: ");
       Serial.println(advertisedDevice.toString().c_str());
@@ -121,7 +124,6 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         Serial.println("HR Sensor is already available");
         return;
       } 
-
       BLEDevice::getScan()->stop();
       myDevice = new BLEAdvertisedDevice(advertisedDevice);
       // Save address of first HR-Sensor      
@@ -162,12 +164,12 @@ static void scanRun(){
 
 void BLE_Setup(void){
   BLEDevice::init("Smart Bike"); 
-  HR_Address = new BLEAddress(AddressHrSensor.c_str()); 
+  HR_Address = new BLEAddress(AddressHrSensor.c_str()); // initial address or HR-Sensor 00:00:00:00:00:00
   scanRun();
 }
 
 void BLE_Loop(){
-// If the flag "doConnect" is true then we have scanned for and found the desired
+  // If the flag "doConnect" is true then we have scanned for and found the desired
   // BLE Server with which we wish to connect.  Now we connect to it.  Once we are 
   // connected we set the connected flag to be true.
   if (doConnect == true) {
