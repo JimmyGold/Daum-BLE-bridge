@@ -41,8 +41,8 @@
 // using HW SPI.  This should be used with nRF51822 based Bluefruit LE modules
 // that use SPI (Bluefruit LE SPI Friend).
 // ----------------------------------------------------------------------------------------------
-#define BLUEFRUIT_SPI_CS               15//8
-#define BLUEFRUIT_SPI_IRQ              18//7
+#define BLUEFRUIT_SPI_CS               15
+#define BLUEFRUIT_SPI_IRQ              18
 #define BLUEFRUIT_SPI_RST              4    // Optional but recommended, set to -1 if unused
 
 // SOFTWARE SPI SETTINGS
@@ -51,6 +51,6 @@
 // This should be used with nRF51822 based Bluefruit LE modules that use SPI
 // (Bluefruit LE SPI Friend).
 // ----------------------------------------------------------------------------------------------
-#define BLUEFRUIT_SPI_SCK              14//13
+#define BLUEFRUIT_SPI_SCK              14
 #define BLUEFRUIT_SPI_MISO             12
-#define BLUEFRUIT_SPI_MOSI             13//11
+#define BLUEFRUIT_SPI_MOSI             13
