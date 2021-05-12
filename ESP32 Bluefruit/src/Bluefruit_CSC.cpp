@@ -31,7 +31,12 @@ void error(const __FlashStringHelper*err) {
   Serial.println(err);
   while (1);
 }
-
+// averages the speed a little bit to get more realistic values
+uint16_t avgSpeed(uint16_t speed){
+    static float avg;
+    avg = (avg*2 + speed)/3.0; 
+    return (uint16_t)avg;
+  }
 
 // ############# Setup Bluefruit LE modul as CyclingSpeedAndCadence-Service
 boolean success;
@@ -85,15 +90,15 @@ void bluefruitSetupCSC(int32_t *cscServiceID, int32_t *cscMeasureCharID, int32_t
     error(F("Could not add measurement characteristic"));
   }
 
-  Serial.println(F("Adding the Sensor Location characteristic (UUID = 0x2A5D): "));                                               // Add characteristic 0x2A5D
-  success = ble.sendCommandWithIntReply(F("AT+GATTADDCHAR=UUID=0x2A5D, PROPERTIES=0x02, MIN_LEN=1, VALUE=6"), cscLocationCharID); // OK
+  Serial.println(F("Adding the Sensor Location characteristic (UUID = 0x2A5D): ")); // Add characteristic 0x2A5D
+  success = ble.sendCommandWithIntReply(F("AT+GATTADDCHAR=UUID=0x2A5D, PROPERTIES=0x02, MIN_LEN=1, VALUE=6"), cscLocationCharID); 
   if (!success)
   {
     error(F("Could not add Sensor Location characteristic"));
   }
 
-  Serial.println(F("Adding the Feature characteristic (UUID = 0x2A5C): "));                                                         // Add characteristic 0x2A5C
-  success = ble.sendCommandWithIntReply(F("AT+GATTADDCHAR=UUID=0x2A5C, PROPERTIES=0x02, MIN_LEN=2, VALUE=0x07"), cscFeatureCharID); // OK
+  Serial.println(F("Adding the Feature characteristic (UUID = 0x2A5C): ")); // Add characteristic 0x2A5C
+  success = ble.sendCommandWithIntReply(F("AT+GATTADDCHAR=UUID=0x2A5C, PROPERTIES=0x02, MIN_LEN=2, VALUE=0x07"), cscFeatureCharID); 
   if (!success)
   {
     error(F("Could not add Feature characteristic"));
@@ -211,10 +216,11 @@ void sendSpeedAndCadence(uint16_t speed, uint16_t cadence, uint32_t cscMeasureCh
   msLastCall = millis();
 
   // Speed
-  wheelRevDouble = wheelRevDouble + ((speed*TSdifference)/(WHEEL_CICUMFERENCE*3.6))/1000; // exact Wheel Revolution in this period
+  speed = avgSpeed(speed);
+  wheelRevDouble = wheelRevDouble + ((speed*TSdifference)/(WHEEL_CICUMFERENCE*3.6))/10000; // exact Wheel Revolution in this period
   wheelRev = wheelRevDouble; // int value of Wheel Revolution
   if (wheelRev != wheelRevOld){
-    wheelTS = wheelTSold + ((wheelRev - wheelRevOld)*WHEEL_CICUMFERENCE*1024*3.6/(speed)); // calculation of timestamp for the int value
+    wheelTS = wheelTSold + ((wheelRev - wheelRevOld)*WHEEL_CICUMFERENCE*1024*3.6/(speed/10.0)); // re-calculation of timestamp for the int value
     wheelRevOld = wheelRev;
     wheelTSold = wheelTS;
   }
@@ -299,10 +305,11 @@ void sendPwr(uint16_t power, uint16_t speed, uint16_t cadence, uint32_t pwrMeasu
   msLastCall = millis();
  
   // Speed
-  wheelRevDouble = wheelRevDouble + ((speed*TSdifference)/(WHEEL_CICUMFERENCE*3.6))/1000; // exact Wheel Revolution in this period
+  speed = avgSpeed(speed);
+  wheelRevDouble = wheelRevDouble + ((speed*TSdifference)/(WHEEL_CICUMFERENCE*3.6))/10000; // exact Wheel Revolution in this period
   wheelRev = wheelRevDouble; // int value of Wheel Revolution
   if (wheelRev != wheelRevOld){
-    wheelTS = wheelTSold + ((wheelRev - wheelRevOld)*WHEEL_CICUMFERENCE*2048*3.6/(speed)); // calculation of timestamp for the int value
+    wheelTS = wheelTSold + ((wheelRev - wheelRevOld)*WHEEL_CICUMFERENCE*2048*3.6/(speed/10.0)); // re-calculation of timestamp for the int value
     wheelRevOld = wheelRev;
     wheelTSold = wheelTS;
   }
@@ -319,7 +326,7 @@ void sendPwr(uint16_t power, uint16_t speed, uint16_t cadence, uint32_t pwrMeasu
   char sTemp[20];
 
   // Power
-  pwrData[0]= 0x30; 
+  pwrData[0]= 0x30; // Flag-Bits: Speed and Cadence available
   pwrData[1]= 0x00;
   pwrData[2]= power & 0xFF;
   pwrData[3]= power >> 8 & 0xFF;
