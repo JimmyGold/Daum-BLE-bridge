@@ -31,12 +31,14 @@
 
 #include "BLE_Client_Configuration.h"
 #include "Daum_RS232.h"
+#include "Power2Speed.h"
 
 #define RXD2 26   // Serial connection to Daum
 #define TXD2 25   // Serial connection to Daum
 #define pulseOutput 27  // to Pulse input (Ear Clip)
-#define DFUpin 19
+#define DFUpin 19 // DFU pin from Bluefruit module
 
+#define POWER2SPEED // calculates speed from power
 
 // ###### global variables ######
 boolean HR_AVAILABLE = false; // HR-Sensor over BLE is available
@@ -44,8 +46,8 @@ boolean PWR_AVAILABLE = false; // Real Power - Sensor over BLE is available
 static boolean pwrAvailableOld = false;
 static boolean pwrDaumOn = false;
 static boolean startup = true;
-uint8_t i, rpm, program, person, pulse, pulseStatus, gear, speed, cadence;
-uint16_t powerPreset, power = 0, timeSecound, pwrPower;
+uint8_t i, rpm, program, person, pulse, pulseStatus, gear,  cadence;
+uint16_t powerPreset, power = 0, timeSecound, pwrPower, speed;
 bool pedaling;
 float distance, kJoule;
 unsigned long lastDataRequest;
@@ -86,10 +88,10 @@ void setup(void){
   while (!Serial); // required for Flora & Micro
   delay(500);
   Serial.begin(115200);
-  Serial2.begin(9600, SERIAL_8N2, RXD2, TXD2); // SERIAL_8N1 (8 Bits, No Paraty, 1 Stop Bit) SERIAL_8N2 (8 Bits, No Paraty, 2 Stop Bit)
- 
-  /* Initialise Bluefruit LE module */
-  BLE_Setup(); // ESP32 internal BLE device (Client - Heart Rate)
+  Serial2.begin(9600, SERIAL_8N2, RXD2, TXD2); // SERIAL_8N1 (8 Bits, No Parity, 1 Stop Bit) SERIAL_8N2 (8 Bits, No Paraty, 2 Stop Bit)
+
+  /* Initialise ESP32 BLE */
+  BLE_Setup(); // ESP32 internal BLE device (Client - Heart Rate & PM search)
 }
 
 // ######## LOOP ###########
@@ -109,13 +111,14 @@ void loop(void){
   }
 
   // ############# READ SERIAL DATA & WRITE BLE DATA ################
-  if (PWR_AVAILABLE){
-    msPwrAvailable = millis();
-  }
-  if (millis() > msPwrAvailable + 30000){ // if Power Meter is longer than 30s unavailable then switch to Daum Power output
-    PWR_AVAILABLE = false;
-  }
-  if (PWR_AVAILABLE && !pwrAvailableOld && !startup){
+  // if (PWR_AVAILABLE){
+  //   msPwrAvailable = millis();
+  // }
+  // if (millis() > msPwrAvailable + 30000){ // if Power Meter is longer than 30s unavailable then switch to Daum Power output
+  //   PWR_AVAILABLE = false;
+  // }
+  PWR_AVAILABLE = true; // test
+  if (PWR_AVAILABLE && !pwrAvailableOld){
     pwrAvailableOld = true;
     Serial.println("Setup Bluefruit as Speed & Cadence Sensor");
     bluefruitSetupCSC(&cscServiceID, &cscMeasureCharID, &cscLocationCharID, &cscFeatureCharID, &cscControlPointCharID);
@@ -129,19 +132,30 @@ void loop(void){
     pwrDaumOn = true;
   }
   // Read serial data after request
-  if ((millis() - (lastDataRequest) > 850) &! stopReading){ // read data 950ms after data request
+  if ((millis() - (lastDataRequest) > 850) &! stopReading){ // read data 850ms after data request
     stopReading = true;
-    DaumReceiveData( (boolean *)&DaumConnected, &program, &person, &pedaling, &powerPreset, &speed, 
-              &cadence, &distance, &timeSecound, &kJoule, &pulse, &pulseStatus, &gear, &power);
+     DaumReceiveData( (boolean *)&DaumConnected, &program, &person, &pedaling, &powerPreset, &speed, 
+               &cadence, &distance, &timeSecound, &kJoule, &pulse, &pulseStatus, &gear, &power);
+    #if defined POWER2SPEED 
+      speed = power2speed(power); // calculate speed from power
+      // Serial.print("Power: ");
+      // Serial.println(power);
+      // Serial.print("Speed: ");
+      // Serial.println(speed);
+    #endif 
     if (DaumConnected){
       newData = true;
-    }          
-    if (pwrDaumOn){
+      //Serial.println("Daum Connected");
+    }     
+    // if (pedaling){
+    //   Serial.println("Pedaling = true");
+    // }     
+    if (pwrDaumOn){ // no real PM is available --> power comes from Daum
       pwrPower = power;
       sendPwr(pwrPower, speed, cadence, pwrMeasureCharId); 
     //  Serial.println("Power Mode");
     }
-    else{
+    else{ // real PM is available --> speed and cadence comes from Daum
       sendSpeedAndCadence(speed, cadence, cscMeasureCharID); 
     //  Serial.println("CSC Mode");
     }
@@ -150,8 +164,10 @@ void loop(void){
   // ############# WRITE DATA FROM DAUM TO TERMINAL ################
   if (newData){
     newData = false;
-    Serial.print("Leistung: \t");
+    Serial.print("Leistung Vorwahl: \t");
     Serial.println(powerPreset);
+    Serial.print("Leistung: \t");
+    Serial.println(power);
     Serial.print("Kadenz: \t");
     Serial.println(cadence);
     Serial.print("Strecke: \t");
@@ -166,7 +182,7 @@ void loop(void){
     Serial.println(kJoule);
   }
 
-    // ############# PULSE SIGNAL ################
+  // ############# PULSE SIGNAL ################
   if (HR_AVAILABLE){
     msPulse = ulong((60*1000.0)/float(HR_val));
     if (millis() - lastPulse >= msPulse){  // Turn on pulse signal (inverted because of open drain)
